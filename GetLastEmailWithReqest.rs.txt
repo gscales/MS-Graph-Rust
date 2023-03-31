@@ -1,0 +1,49 @@
+use azure_identity::client_credentials_flow;
+use reqwest;
+use std::{error::Error, string};
+fn main() -> Result<(), Box<dyn Error>> {
+    println!("Start Rust test");
+    let mailbox_to_access: &'static str = "gscales@datarumble.com";
+    let at = tokio::runtime::Runtime::new()?.block_on(auth_client())?;
+    tokio::runtime::Runtime::new()?.block_on(get_last_email(at,mailbox_to_access.to_string()))?;
+    println!("End Rust test");
+     Ok(())
+}
+
+async fn auth_client() -> Result<(azure_core::auth::AccessToken), Box<dyn Error>> {
+    let client_id = "4xxx".to_string();
+    let client_secret ="mwdxxx".to_string();
+    let tenant_id = "1c3a18bf-da31-4f6c-xxxx".to_string();
+
+    let http_client = azure_core::new_http_client();
+    // This will give you the final token to use in authorization.
+    let token = client_credentials_flow::perform(
+        http_client.clone(),
+        &client_id,
+        &client_secret,
+        &["https://graph.microsoft.com/.default"],
+        &tenant_id,
+    )
+    .await?;    
+    Ok(token.access_token)
+}
+
+async fn get_last_email(at : azure_core::auth::AccessToken, mailbox_to_access : String) -> Result<(), Box<dyn Error>> {
+    let graph_url = format!("https://graph.microsoft.com/v1.0/users/{}/messages?$top=1&$select=subject,receivedDateTime,from,bodyPreview",mailbox_to_access);
+    println!("{}",mailbox_to_access);
+    let client = reqwest::Client::new();
+    let res = client
+        .get(&graph_url)
+        .bearer_auth(at.secret().to_string())
+        .send()
+        .await?;
+    println!("Status: {}", res.status());
+    println!("Headers:\n{:#?}", res.headers());
+    let body = res.text().await?;
+    println!("Body:\n{}", body);
+    Ok(())
+}
+
+
+
+
